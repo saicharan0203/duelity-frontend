@@ -12,6 +12,11 @@ interface UserProfile {
   tier: string
   isNewUser: boolean
   collegeSelected: boolean
+  totalMatches: number
+  wins: number
+  losses: number
+  bestStreak: number
+  accuracy: number
   college: { id: string; name: string; icon: string } | null
 }
 
