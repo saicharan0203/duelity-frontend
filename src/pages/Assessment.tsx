@@ -1,162 +1,159 @@
-// src/pages/Assessment.tsx
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { auth } from '../services/firebase'
 
 const QUESTIONS = [
-  { q: 'What is 15 × 8?',                            options: ['100', '120', '110', '130'],   answer: '120' },
-  { q: 'What is 25% of 200?',                         options: ['40', '50', '60', '25'],       answer: '50'  },
-  { q: 'Solve: x + 14 = 31',                          options: ['17', '15', '18', '16'],       answer: '17'  },
-  { q: 'What is √144?',                               options: ['11', '14', '12', '13'],       answer: '12'  },
-  { q: 'If 3x − 7 = 14, what is x?',                 options: ['5', '7', '9', '3'],           answer: '7'   },
-  { q: 'What is 12² − 5²?',                           options: ['109', '119', '99', '129'],    answer: '119' },
-  { q: 'Simplify: (2³ × 2⁴) ÷ 2²',                   options: ['32', '16', '64', '8'],        answer: '32'  },
-  { q: 'What is 3! + 4!?',                            options: ['24', '30', '36', '18'],       answer: '30'  },
-  { q: 'Sum of first 10 natural numbers?',            options: ['45', '50', '55', '60'],       answer: '55'  },
-  { q: 'Solve: x² − 5x + 6 = 0',                     options: ['2,3', '1,6', '2,4', '3,4'],  answer: '2,3' },
+  {q:"What is 15 × 8?", opts:["100","120","110","130"], ans:"120", d:1},
+  {q:"Solve: x + 14 = 31", opts:["17","15","18","16"], ans:"17", d:1},
+  {q:"What is 25% of 200?", opts:["40","50","60","25"], ans:"50", d:1},
+  {q:"What is √144?", opts:["11","14","12","13"], ans:"12", d:2},
+  {q:"If 3x − 7 = 14, what is x?", opts:["5","7","9","3"], ans:"7", d:2},
+  {q:"What is 12² − 5²?", opts:["109","119","99","129"], ans:"119", d:2},
+  {q:"Simplify: (2³ × 2⁴) ÷ 2²", opts:["32","16","64","8"], ans:"32", d:3},
+  {q:"A train covers 240km in 3hrs. Speed in km/h?", opts:["70","80","90","60"], ans:"80", d:3},
+  {q:"What is 3! + 4!?", opts:["24","30","36","18"], ans:"30", d:3},
+  {q:"Find x: 2x² − 8 = 0", opts:["x=±4","x=±2","x=±3","x=±1"], ans:"x=±2", d:3},
 ]
 
 export default function Assessment() {
-  const [current, setCurrent] = useState(0)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [correct, setCorrect] = useState(0)
-  const [done, setDone] = useState(false)
-  const [tier, setTier] = useState('')
-  const [timeLeft, setTimeLeft] = useState(15)
-  const [saving, setSaving] = useState(false)
-  const startTimeRef = useRef(Date.now())
+  const [phase, setPhase] = useState<'intro'|'quiz'|'result'>('intro')
+  const [cur, setCur] = useState(0)
+  const [answers, setAnswers] = useState<string[]>([])
+  const [timings, setTimings] = useState<number[]>([])
+  const [selected, setSelected] = useState<string|null>(null)
+  const [qStart, setQStart] = useState(Date.now())
+  const [tier, setTier] = useState<any>(null)
   const navigate = useNavigate()
-  const { refreshProfile } = useAuth()
-  const timerRef = useRef<any>(null)
+  const { user } = useAuth()
 
-  useEffect(() => {
-    if (done) return
-    setTimeLeft(15)
-    clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) { clearInterval(timerRef.current); advance(null, correct); return 15 }
-        return t - 1
-      })
-    }, 1000)
-    return () => clearInterval(timerRef.current)
-  }, [current, done])
+  function startQuiz() { setPhase('quiz'); setQStart(Date.now()) }
 
-  function advance(ans: string | null, currentCorrect: number) {
-    const isCorrect = ans === QUESTIONS[current].answer
-    const newCorrect = isCorrect ? currentCorrect + 1 : currentCorrect
-
-    setTimeout(async () => {
-      if (current + 1 >= QUESTIONS.length) {
-        clearInterval(timerRef.current)
-        setCorrect(newCorrect)
-        await submitAssessment(newCorrect)
-      } else {
-        if (isCorrect) setCorrect(c => c + 1)
-        setCurrent(c => c + 1)
-        setSelected(null)
-      }
-    }, 500)
+  function selectOpt(opt: string) {
+    if (selected !== null) return
+    setSelected(opt)
+    setTimings(t => [...t, (Date.now()-qStart)/1000])
+    setAnswers(a => [...a, opt])
   }
 
-  function handleAnswer(ans: string) {
-    if (selected) return
-    clearInterval(timerRef.current)
-    setSelected(ans)
-    advance(ans, correct)
+  function nextQ() {
+    if (cur + 1 >= QUESTIONS.length) { showResult(); return }
+    setCur(c => c+1); setSelected(null); setQStart(Date.now())
   }
 
-  async function submitAssessment(finalCorrect: number) {
-    setSaving(true)
-    const timeSecs = Math.round((Date.now() - startTimeRef.current) / 1000)
-    try {
-      const user = auth.currentUser
-      if (!user) return
-      const token = await user.getIdToken()
-      const res = await fetch('http://localhost:3001/api/auth/complete-assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ correct: finalCorrect, timeSecs })
-      })
-      const data = await res.json()
-      setTier(data.tier || 'bronze')
-    } catch { setTier('bronze') }
-    setSaving(false)
-    setDone(true)
+  function showResult() {
+    const correct = answers.filter((a,i) => a === QUESTIONS[i].ans).length
+    const accuracy = correct / QUESTIONS.length
+    const avgTime = timings.reduce((a,b)=>a+b,0) / timings.length
+    let t
+    if (accuracy >= 0.9 && avgTime < 15) t = {label:'👑 Diamond', pts:800, color:'#f59e0b', desc:"You're elite. Welcome to the top."}
+    else if (accuracy >= 0.7) t = {label:'🥇 Gold', pts:600, color:'#e63946', desc:"Strong skills. You're ready to climb."}
+    else if (accuracy >= 0.5) t = {label:'🥈 Silver', pts:400, color:'#9ca3af', desc:"Solid foundation. Keep grinding."}
+    else t = {label:'🥉 Bronze', pts:200, color:'#cd7f32', desc:"Everyone starts somewhere. Let's go."}
+    setTier({...t, correct, accuracy: Math.round(accuracy*100), totalTime: Math.round(timings.reduce((a,b)=>a+b,0))})
+    setPhase('result')
+    // Save to backend
+    if (user) {
+      axios.post(`${import.meta.env.VITE_API_URL}/api/users/complete-assessment`, {
+        uid: user.uid, tier: t.label.split(' ')[1].toLowerCase(), points: t.pts
+      }).catch(console.error)
+    }
   }
 
-  async function handleContinue() {
-    await refreshProfile()
-    navigate('/college', { replace: true })
-  }
-
-  const TIER_COLORS: Record<string, string> = { bronze: '#CD7F32', silver: '#C0C0C0', gold: '#FFD700', platinum: '#E5E4E2', diamond: '#B9F2FF' }
-  const TIER_ICONS: Record<string, string>  = { bronze: '🥉', silver: '🥈', gold: '🥇', platinum: '⚡', diamond: '💎' }
-
-  if (done) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <div style={{ textAlign: 'center', animation: 'fadeUp 0.5s both' }}>
-        <div style={{ fontSize: 80, marginBottom: 16 }}>{TIER_ICONS[tier] || '🥉'}</div>
-        <div style={{ fontFamily: "'Bebas Neue'", fontSize: 56, color: TIER_COLORS[tier] || '#fff', letterSpacing: 4 }}>{tier?.toUpperCase()}</div>
-        <div style={{ fontSize: 18, color: 'var(--muted2)', marginBottom: 8 }}>Your starting tier</div>
-        <div style={{ fontSize: 15, color: 'var(--muted)', marginBottom: 40 }}>{correct}/10 correct</div>
-        <button onClick={handleContinue} style={{ padding: '16px 48px', background: 'var(--red)', border: 'none', borderRadius: 8, color: 'white', fontSize: 16, fontWeight: 700, fontFamily: "'Barlow Condensed'", letterSpacing: 3, textTransform: 'uppercase', cursor: 'pointer' }}>
-          CONTINUE →
-        </button>
-      </div>
-    </div>
-  )
-
-  if (saving) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 48, height: 48, border: '3px solid rgba(230,57,70,0.2)', borderTop: '3px solid var(--red)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
-        <div style={{ color: 'var(--muted2)' }}>Calculating your tier...</div>
-      </div>
-    </div>
-  )
-
-  const q = QUESTIONS[current]
-  const progress = (current / QUESTIONS.length) * 100
+  const q = QUESTIONS[cur]
+  const LABELS = ['','Easy','Medium','Hard']
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: 20 }}>
-      <div style={{ width: '100%', maxWidth: 600, animation: 'fadeUp 0.4s both' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontFamily: "'Bebas Neue'", fontSize: 28, letterSpacing: 2 }}>SKILL ASSESSMENT</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', letterSpacing: 2 }}>Question {current + 1} of {QUESTIONS.length}</div>
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',overflow:'hidden',background:'var(--bg)'}}>
+      <div className="bg-grid"/>
+      <div className="orb" style={{width:500,height:500,background:'rgba(230,57,70,0.1)',top:-150,right:-100,animation:'pulse 6s ease-in-out infinite'}}/>
+      <div className="orb" style={{width:300,height:300,background:'rgba(230,57,70,0.05)',bottom:-100,left:'20%',animation:'pulse 8s ease-in-out infinite reverse'}}/>
+
+      {phase==='intro' && (
+        <div style={{position:'relative',zIndex:1,textAlign:'center',maxWidth:680,padding:'40px 24px',animation:'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both'}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:42,letterSpacing:3,marginBottom:8}}>duelity<span style={{color:'var(--red)'}}>.</span>in</div>
+          <div style={{display:'inline-block',fontFamily:"'Barlow Condensed'",fontSize:12,letterSpacing:5,textTransform:'uppercase',color:'var(--red)',border:'1px solid rgba(230,57,70,0.3)',padding:'6px 16px',borderRadius:2,marginBottom:28}}>⚡ Skill Assessment</div>
+          <h1 style={{fontFamily:"'Bebas Neue'",fontSize:'clamp(60px,8vw,96px)',lineHeight:0.95,letterSpacing:2,marginBottom:24}}>
+            Let's See<br/><span style={{color:'var(--red)',textShadow:'0 0 60px rgba(230,57,70,0.4)'}}>What You've Got</span>
+          </h1>
+          <p style={{fontSize:16,color:'var(--muted2)',lineHeight:1.8,marginBottom:40}}>10 math questions. No timer — take your time.<br/>We'll place you in the right tier based on your accuracy and speed.</p>
+          <div style={{display:'flex',justifyContent:'center',gap:16,marginBottom:40,flexWrap:'wrap'}}>
+            {[['🥉 Bronze','#cd7f32','200 pts'],['🥈 Silver','#9ca3af','400 pts'],['🥇 Gold','#e63946','600 pts'],['👑 Diamond','#f59e0b','800 pts']].map(([name,color,pts])=>(
+              <div key={name} style={{background:'rgba(255,255,255,0.03)',border:'1px solid var(--border)',borderRadius:6,padding:'16px 20px',minWidth:100,textAlign:'center'}}>
+                <div style={{fontFamily:"'Barlow Condensed'",fontSize:16,fontWeight:700,marginBottom:4,color}}>{name}</div>
+                <div style={{fontSize:12,color:'var(--muted)'}}>{pts}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: timeLeft <= 5 ? 'rgba(230,57,70,0.15)' : 'rgba(255,255,255,0.04)', border: `2px solid ${timeLeft <= 5 ? 'var(--red)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue'", fontSize: 24, color: timeLeft <= 5 ? 'var(--red)' : 'var(--text)', animation: timeLeft <= 5 ? 'timerPulse 0.5s ease-in-out infinite' : 'none', transition: 'all 0.3s' }}>
-            {timeLeft}
+          <button onClick={startQuiz} style={{padding:'18px 48px',background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:4,color:'white',cursor:'pointer'}}>Start Assessment →</button>
+          <p style={{marginTop:16,fontSize:12,color:'var(--muted)'}}>Takes about 3–5 minutes</p>
+        </div>
+      )}
+
+      {phase==='quiz' && (
+        <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:720,padding:'40px 24px',animation:'fadeUp 0.4s ease both'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:28,letterSpacing:3}}>duelity<span style={{color:'var(--red)'}}>.</span>in</div>
+            <div style={{fontFamily:"'Barlow Condensed'",fontSize:14,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)'}}>Question {cur+1} of {QUESTIONS.length}</div>
           </div>
-        </div>
-
-        <div style={{ height: 3, background: 'var(--border)', borderRadius: 2, marginBottom: 32, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${progress}%`, background: 'var(--red)', transition: 'width 0.3s ease' }} />
-        </div>
-
-        <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 36px', marginBottom: 20 }}>
-          <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.4 }}>{q.q}</div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {q.options.map((opt, i) => {
-            const isSelected = selected === opt
-            const isCorrect = selected && opt === q.answer
-            const isWrong = isSelected && opt !== q.answer
-            return (
-              <button key={i} onClick={() => handleAnswer(opt)} disabled={!!selected} style={{ padding: '18px 16px', background: isCorrect ? 'rgba(34,197,94,0.15)' : isWrong ? 'rgba(230,57,70,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isCorrect ? '#22c55e' : isWrong ? 'var(--red)' : 'var(--border)'}`, borderRadius: 8, color: 'var(--text)', fontSize: 16, fontWeight: 500, textAlign: 'left', cursor: selected ? 'default' : 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', fontFamily: "'Barlow Condensed'", fontSize: 13, letterSpacing: 1, flexShrink: 0 }}>
-                  {['A', 'B', 'C', 'D'][i]}
-                </span>
-                {opt}
+          <div style={{width:'100%',height:3,background:'rgba(255,255,255,0.06)',borderRadius:2,marginBottom:24,overflow:'hidden'}}>
+            <div style={{height:'100%',background:'var(--red)',borderRadius:2,transition:'width 0.5s',width:`${(cur/QUESTIONS.length)*100}%`,boxShadow:'0 0 10px rgba(230,57,70,0.6)'}}/>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:32}}>
+            {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:i<q.d?'var(--red)':'rgba(255,255,255,0.1)'}}/>)}
+            <span style={{fontFamily:"'Barlow Condensed'",fontSize:12,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginLeft:6}}>{LABELS[q.d]}</span>
+          </div>
+          <div style={{marginBottom:36}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:14,letterSpacing:4,color:'var(--red)',marginBottom:12}}>Q{cur+1}</div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:'clamp(32px,5vw,52px)',lineHeight:1.1,letterSpacing:1}}>{q.q}</div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:24}}>
+            {q.opts.map((opt,i)=>{
+              let bg='rgba(255,255,255,0.03)', border='1px solid var(--border)', opacity=1
+              if (selected !== null) {
+                if (opt === q.ans) { bg='rgba(34,197,94,0.1)'; border='1px solid rgba(34,197,94,0.4)' }
+                else if (opt === selected && opt !== q.ans) { bg='rgba(230,57,70,0.1)'; border='1px solid rgba(230,57,70,0.4)' }
+                else { opacity=0.35 }
+              }
+              return (
+                <button key={opt} onClick={()=>selectOpt(opt)} disabled={selected!==null} style={{position:'relative',display:'flex',alignItems:'center',gap:14,padding:'18px 20px',background:bg,border,borderRadius:6,color:'var(--text)',fontSize:16,fontWeight:500,cursor:selected?'default':'pointer',textAlign:'left',transition:'all 0.2s',opacity}}>
+                  <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:'var(--muted)',minWidth:20}}>{String.fromCharCode(65+i)}</span>
+                  <span style={{flex:1}}>{opt}</span>
+                  {selected && opt===q.ans && <span style={{color:'#22c55e',fontWeight:'bold'}}>✓</span>}
+                  {selected && opt===selected && opt!==q.ans && <span style={{color:'var(--red)',fontWeight:'bold'}}>✗</span>}
+                </button>
+              )
+            })}
+          </div>
+          {selected && (
+            <div style={{display:'flex',justifyContent:'flex-end'}}>
+              <button onClick={nextQ} style={{padding:'14px 32px',background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:3,color:'white',cursor:'pointer'}}>
+                {cur+1===QUESTIONS.length?'See My Results →':'Next Question →'}
               </button>
-            )
-          })}
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {phase==='result' && tier && (
+        <div style={{position:'relative',zIndex:1,textAlign:'center',maxWidth:600,padding:'40px 24px',animation:'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both'}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:28,letterSpacing:3,marginBottom:32}}>duelity<span style={{color:'var(--red)'}}>.</span>in</div>
+          <div style={{display:'inline-block',fontFamily:"'Barlow Condensed'",fontSize:12,letterSpacing:5,textTransform:'uppercase',color:'var(--muted)',border:'1px solid var(--border)',padding:'6px 16px',borderRadius:2,marginBottom:24}}>Assessment Complete</div>
+          <h1 style={{fontFamily:"'Bebas Neue'",fontSize:48,letterSpacing:3,color:'var(--muted)',marginBottom:8}}>You Are A</h1>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:'clamp(64px,10vw,96px)',letterSpacing:3,lineHeight:1,marginBottom:8,color:tier.color,animation:'tierPop 0.5s cubic-bezier(0.16,1,0.3,1) 0.2s both'}}>{tier.label}</div>
+          <div style={{fontFamily:"'Barlow Condensed'",fontSize:20,letterSpacing:4,marginBottom:12,color:tier.color}}>+{tier.pts} Starting Points</div>
+          <p style={{fontSize:15,color:'var(--muted2)',marginBottom:36,lineHeight:1.6}}>{tier.desc}</p>
+          <div style={{display:'flex',justifyContent:'center',gap:48,padding:28,background:'rgba(255,255,255,0.02)',border:'1px solid var(--border)',borderRadius:8}}>
+            {[[`${tier.correct}/10`,'Correct'],[`${tier.totalTime}s`,'Total Time'],[`${tier.accuracy}%`,'Accuracy']].map(([num,label])=>(
+              <div key={label}>
+                <div style={{fontFamily:"'Bebas Neue'",fontSize:42,letterSpacing:2,lineHeight:1}}>{num}</div>
+                <div style={{fontSize:11,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginTop:6}}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={()=>navigate('/college')} style={{marginTop:40,padding:'18px 48px',background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:4,color:'white',cursor:'pointer'}}>Enter the Arena →</button>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,199 +1,167 @@
-// src/pages/Battle.tsx
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { getSocket } from '../services/socket'
-import { useAuth } from '../contexts/AuthContext'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
-interface Question { question: string; options: string[] }
+const QUESTIONS = [
+  {q:"What is 17 × 6?", opts:["92","102","112","98"], ans:"102"},
+  {q:"Solve: 2x + 5 = 19", opts:["5","6","7","8"], ans:"7"},
+  {q:"What is 15% of 300?", opts:["35","40","45","50"], ans:"45"},
+  {q:"√225 = ?", opts:["13","14","15","16"], ans:"15"},
+  {q:"What is 8³?", opts:["512","612","412","482"], ans:"512"},
+  {q:"If 5x − 3 = 22, x = ?", opts:["4","5","6","7"], ans:"5"},
+  {q:"What is 144 ÷ 12 × 3?", opts:["36","48","32","54"], ans:"36"},
+  {q:"Simplify: 3² + 4²", opts:["20","25","30","35"], ans:"25"},
+  {q:"A car goes 180km in 2hrs. Speed?", opts:["80","85","90","95"], ans:"90"},
+  {q:"What is 11² − 9²?", opts:["38","40","42","44"], ans:"40"},
+]
 
 export default function Battle() {
-  const { matchId } = useParams()
-  const navigate = useNavigate()
-  const { profile } = useAuth()
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [currentQ, setCurrentQ] = useState(0)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null)
+  const [cur, setCur] = useState(0)
   const [myScore, setMyScore] = useState(0)
   const [oppScore, setOppScore] = useState(0)
+  const [selected, setSelected] = useState<string|null>(null)
   const [timeLeft, setTimeLeft] = useState(10)
-  const [countdown, setCountdown] = useState<number | null>(3)
-  const [opponentAnswered, setOpponentAnswered] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [startTime, setStartTime] = useState(0)
+  const [results, setResults] = useState<string[]>([])
+  const [ended, setEnded] = useState(false)
+  const [myStreak, setMyStreak] = useState(0)
   const timerRef = useRef<any>(null)
+  const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const mode = params.get('mode') || 'ranked'
 
-  useEffect(() => {
-    const socket = getSocket()
-    if (!socket || !matchId) return
-
-    socket.emit('game:ready', { matchId })
-
-    socket.on('game:countdown', ({ seconds }: { seconds: number }) => setCountdown(seconds))
-
-    socket.on('game:start', () => {
-      setCountdown(null)
-      setStartTime(Date.now())
-      startTimer()
-    })
-
-    socket.on('game:opponent_answered', () => setOpponentAnswered(true))
-
-    socket.on('game:question_result', ({ questionIndex, correctAnswer: ca, p1Score, p2Score }: any) => {
-      setCorrectAnswer(ca)
-      const isP1 = questions.length > 0
-      setMyScore(profile?.id ? p1Score : p2Score)
-      setOppScore(profile?.id ? p2Score : p1Score)
-      clearInterval(timerRef.current)
-    })
-
-    socket.on('game:next_question', ({ questionIndex }: { questionIndex: number }) => {
-      setCurrentQ(questionIndex)
-      setSelected(null)
-      setCorrectAnswer(null)
-      setOpponentAnswered(false)
-      setTimeLeft(10)
-      setStartTime(Date.now())
-      startTimer()
-    })
-
-    socket.on('game:end', (data: any) => {
-      clearInterval(timerRef.current)
-      setResult(data)
-    })
-
-    // Get match questions from state passed via navigation
-    const state = (window as any).__matchState
-    if (state?.questions) setQuestions(state.questions)
-
-    return () => {
-      socket.off('game:countdown')
-      socket.off('game:start')
-      socket.off('game:opponent_answered')
-      socket.off('game:question_result')
-      socket.off('game:next_question')
-      socket.off('game:end')
-      clearInterval(timerRef.current)
-    }
-  }, [matchId])
+  useEffect(() => { startTimer(); return ()=>clearInterval(timerRef.current) }, [cur])
 
   function startTimer() {
     clearInterval(timerRef.current)
     setTimeLeft(10)
-    let t = 10
-    timerRef.current = setInterval(() => {
-      t--
-      setTimeLeft(t)
-      if (t <= 0) clearInterval(timerRef.current)
+    timerRef.current = setInterval(()=>{
+      setTimeLeft(t => {
+        if (t <= 1) { clearInterval(timerRef.current); timeUp(); return 0 }
+        return t - 1
+      })
     }, 1000)
+    // Simulate opponent
+    const oppDelay = (Math.random() * 5 + 3) * 1000
+    setTimeout(()=>{ setOppScore(s => s + (Math.random()>0.35?10:0)) }, oppDelay)
   }
 
-  function handleAnswer(answer: string) {
-    if (selected || correctAnswer) return
-    setSelected(answer)
-    const timeTakenMs = Date.now() - startTime
-    getSocket()?.emit('game:answer', { matchId, questionIndex: currentQ, answer, timeTakenMs })
+  function selectAnswer(opt: string) {
+    if (selected) return
+    clearInterval(timerRef.current)
+    setSelected(opt)
+    const correct = opt === QUESTIONS[cur].ans
+    if (correct) { setMyScore(s=>s+10); setMyStreak(s=>s+1) } else { setMyStreak(0) }
+    setResults(r=>[...r, correct?'win':'loss'])
+    setTimeout(()=>advance(), 1800)
   }
 
-  // Countdown screen
-  if (countdown !== null) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: "'Bebas Neue'", fontSize: 160, color: 'var(--red)', lineHeight: 1, animation: 'timerPulse 0.5s ease-in-out infinite' }}>{countdown}</div>
-        <div style={{ fontFamily: "'Barlow Condensed'", fontSize: 18, letterSpacing: 4, color: 'var(--muted2)', textTransform: 'uppercase' }}>Get Ready</div>
-      </div>
-    </div>
-  )
-
-  // Result screen
-  if (result) {
-    const won = result.winnerId === profile?.id
-    const isDraw = result.isDraw
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', animation: 'fadeUp 0.5s both' }}>
-          <div style={{ fontSize: 80, marginBottom: 16 }}>{isDraw ? '🤝' : won ? '🏆' : '💀'}</div>
-          <div style={{ fontFamily: "'Bebas Neue'", fontSize: 72, letterSpacing: 4, color: isDraw ? '#f59e0b' : won ? '#22c55e' : 'var(--red)', marginBottom: 8 }}>
-            {isDraw ? 'DRAW' : won ? 'VICTORY' : 'DEFEAT'}
-          </div>
-          <div style={{ fontFamily: "'Bebas Neue'", fontSize: 48, letterSpacing: 3, marginBottom: 8 }}>
-            {result.p1Score} <span style={{ color: 'var(--muted)' }}>—</span> {result.p2Score}
-          </div>
-          {result.p1RatingChange !== 0 && (
-            <div style={{ fontSize: 18, color: result.p1RatingChange > 0 ? '#22c55e' : 'var(--red)', marginBottom: 40 }}>
-              {result.p1RatingChange > 0 ? '+' : ''}{result.p1RatingChange} rating
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-            <button onClick={() => navigate('/play')} style={{ padding: '14px 32px', background: 'var(--red)', border: 'none', borderRadius: 8, color: 'white', fontSize: 15, fontWeight: 700, fontFamily: "'Barlow Condensed'", letterSpacing: 2 }}>
-              PLAY AGAIN
-            </button>
-            <button onClick={() => navigate('/dashboard')} style={{ padding: '14px 32px', background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--muted)', fontSize: 15 }}>
-              Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+  function timeUp() {
+    if (selected) return
+    setSelected('__timeout__')
+    setMyStreak(0)
+    setResults(r=>[...r,'loss'])
+    setTimeout(()=>advance(), 1800)
   }
 
-  if (!questions.length) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ width: 40, height: 40, border: '3px solid rgba(230,57,70,0.2)', borderTop: '3px solid var(--red)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-    </div>
-  )
+  function advance() {
+    if (cur + 1 >= QUESTIONS.length) { setEnded(true); return }
+    setCur(c=>c+1); setSelected(null)
+  }
 
-  const q = questions[currentQ]
-  const timerPct = (timeLeft / 10) * 100
-  const timerColor = timeLeft <= 3 ? 'var(--red)' : timeLeft <= 6 ? '#f59e0b' : '#22c55e'
+  const q = QUESTIONS[cur]
+  const myWin = myScore > oppScore, draw = myScore === oppScore
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '32px 24px', display: 'flex', flexDirection: 'column', maxWidth: 700, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-        <div style={{ fontFamily: "'Bebas Neue'", fontSize: 32, letterSpacing: 2, color: '#22c55e' }}>{myScore}</div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, letterSpacing: 3, color: 'var(--muted)', textTransform: 'uppercase' }}>Question {currentQ + 1}/{questions.length}</div>
-          <div style={{ width: 200, height: 4, background: 'var(--border)', borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${timerPct}%`, background: timerColor, transition: 'width 1s linear, background 0.3s' }} />
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',background:'var(--bg)',position:'relative',overflow:'hidden'}}>
+      <div className="bg-grid" style={{opacity:0.5}}/>
+
+      {/* TOP BAR */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 32px',position:'relative',zIndex:2,borderBottom:'1px solid var(--border)'}}>
+        <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,letterSpacing:4,textTransform:'uppercase',color:'var(--red)',border:'1px solid rgba(230,57,70,0.3)',padding:'5px 14px',borderRadius:2}}>⚡ {mode.toUpperCase()} MATCH</div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:3,color:'var(--muted2)'}}>Q {cur+1} / 10</div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:32,letterSpacing:2,color:timeLeft<=3?'#ff4444':'var(--red)',minWidth:40,textAlign:'right'}}>{timeLeft}</div>
+      </div>
+
+      {/* TIMER BAR */}
+      <div style={{width:'100%',height:4,background:'rgba(255,255,255,0.05)',position:'relative',zIndex:2}}>
+        <div style={{height:'100%',background:timeLeft<=3?'linear-gradient(90deg,#ff0000,#ff4444)':'linear-gradient(90deg,#e63946,#ff6b6b)',boxShadow:'0 0 10px rgba(230,57,70,0.6)',transition:'width 1s linear',width:`${(timeLeft/10)*100}%`}}/>
+      </div>
+
+      {/* ARENA */}
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'24px 32px',position:'relative',zIndex:2,gap:16}}>
+        {/* MY SCORE */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,minWidth:120}}>
+          <div style={{width:56,height:56,background:'linear-gradient(135deg,#e63946,#c1121f)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Bebas Neue'",fontSize:20,color:'white',border:'2px solid rgba(230,57,70,0.4)'}}>ME</div>
+          <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,letterSpacing:3,textTransform:'uppercase',color:'var(--muted2)'}}>You</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:64,letterSpacing:2,color:'var(--text)',lineHeight:1}}>{myScore}</div>
+          <div style={{fontSize:10,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)'}}>Points</div>
+          {myStreak >= 3 && <div style={{fontSize:18}}>{'🔥'.repeat(Math.min(myStreak,5))}</div>}
+        </div>
+
+        {/* CENTRE */}
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:24,position:'relative',maxWidth:640}}>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:14,letterSpacing:8,color:'var(--muted)',opacity:0.5}}>VS</div>
+          <div style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:12,padding:'32px 40px',width:'100%',textAlign:'center',transition:'all 0.3s'}}>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:'clamp(28px,4vw,44px)',letterSpacing:2,color:'var(--text)',lineHeight:1.2}}>{q.q}</div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,width:'100%'}}>
+            {q.opts.map((opt,i)=>{
+              let bg='rgba(255,255,255,0.03)', border='1px solid var(--border)', opacity=1
+              if (selected) {
+                if (opt===q.ans) { bg='rgba(34,197,94,0.12)'; border='1px solid #22c55e' }
+                else if (opt===selected) { bg='rgba(230,57,70,0.1)'; border='1px solid rgba(230,57,70,0.5)' }
+                else opacity=0.3
+              }
+              return (
+                <button key={opt} onClick={()=>selectAnswer(opt)} disabled={!!selected} style={{padding:'14px 20px',background:bg,border,borderRadius:8,display:'flex',alignItems:'center',gap:12,color:'var(--text)',fontSize:15,fontWeight:500,cursor:selected?'default':'pointer',transition:'all 0.2s',textAlign:'left',opacity}}>
+                  <span style={{fontFamily:"'Bebas Neue'",fontSize:18,color:opt===q.ans&&selected?'#22c55e':'var(--muted)',minWidth:20}}>{String.fromCharCode(65+i)}</span>
+                  <span>{opt}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
-        <div style={{ fontFamily: "'Bebas Neue'", fontSize: 32, letterSpacing: 2, color: 'var(--red)' }}>{oppScore}</div>
-      </div>
 
-      {/* Timer */}
-      <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: '50%', border: `3px solid ${timerColor}`, fontFamily: "'Bebas Neue'", fontSize: 36, color: timerColor, animation: timeLeft <= 3 ? 'timerPulse 0.5s ease-in-out infinite' : 'none', transition: 'border-color 0.3s, color 0.3s' }}>
-          {timeLeft}
+        {/* OPP SCORE */}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,minWidth:120}}>
+          <div style={{width:56,height:56,background:'linear-gradient(135deg,#1a2a4a,#0f1a2e)',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Bebas Neue'",fontSize:20,color:'var(--text)',border:'2px solid rgba(100,120,180,0.4)'}}>OP</div>
+          <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,letterSpacing:3,textTransform:'uppercase',color:'var(--muted2)'}}>Opponent</div>
+          <div style={{fontFamily:"'Bebas Neue'",fontSize:64,letterSpacing:2,color:'var(--text)',lineHeight:1}}>{oppScore}</div>
+          <div style={{fontSize:10,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)'}}>Points</div>
         </div>
       </div>
 
-      {/* Question */}
-      <div style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, padding: '32px 36px', marginBottom: 24, flex: 'none' }}>
-        <div style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.5 }}>{q?.question}</div>
+      {/* DOTS */}
+      <div style={{padding:'12px 32px 20px',display:'flex',justifyContent:'center',position:'relative',zIndex:2}}>
+        <div style={{display:'flex',gap:8}}>
+          {QUESTIONS.map((_,i)=>(
+            <div key={i} style={{width:28,height:6,borderRadius:3,background:i<results.length?(results[i]==='win'?'#22c55e':'var(--red)'):i===cur?'var(--red)':'rgba(255,255,255,0.08)',boxShadow:i===cur?'0 0 8px rgba(230,57,70,0.4)':'none',animation:i===cur?'dotPulse 1s ease-in-out infinite':'none'}}/>
+          ))}
+        </div>
       </div>
 
-      {/* Opponent indicator */}
-      {opponentAnswered && !correctAnswer && (
-        <div style={{ textAlign: 'center', fontSize: 13, color: '#f59e0b', marginBottom: 12 }}>⚡ Opponent answered!</div>
+      {/* END OVERLAY */}
+      {ended && (
+        <div style={{position:'fixed',inset:0,background:'rgba(8,10,15,0.95)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,animation:'fadeUp 0.5s ease both'}}>
+          <div style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:16,padding:'48px 56px',textAlign:'center',maxWidth:480,width:'90%',position:'relative',overflow:'hidden'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,transparent,var(--red),transparent)'}}/>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:72,letterSpacing:6,lineHeight:1,marginBottom:8,color:draw?'var(--muted2)':myWin?'#22c55e':'var(--red)',textShadow:draw?'none':myWin?'0 0 40px rgba(34,197,94,0.4)':'0 0 40px var(--red-glow)'}}>{draw?'DRAW':myWin?'VICTORY':'DEFEAT'}</div>
+            <div style={{fontSize:14,color:'var(--muted2)',marginBottom:36}}>{draw?'An equal battle — well played':myWin?'You outdueled your opponent':'Train harder and come back stronger'}</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:24,marginBottom:16}}>
+              {[[myScore,'You'],[oppScore,'Opponent']].map(([s,l],i)=>(
+                <div key={i} style={{textAlign:'center'}}>
+                  <div style={{fontFamily:"'Bebas Neue'",fontSize:64,letterSpacing:2,lineHeight:1}}>{s}</div>
+                  <div style={{fontSize:12,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)'}}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontFamily:"'Barlow Condensed'",fontSize:22,letterSpacing:4,color:draw?'var(--muted2)':myWin?'#22c55e':'var(--red)',marginBottom:32}}>{draw?'+0':myWin?'+24':'−12'} Rating</div>
+            <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+              <button onClick={()=>{setCur(0);setMyScore(0);setOppScore(0);setSelected(null);setResults([]);setEnded(false);setMyStreak(0)}} style={{padding:'13px 28px',background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:3,color:'white',cursor:'pointer'}}>Play Again</button>
+              <button onClick={()=>navigate('/play')} style={{padding:'13px 28px',background:'transparent',border:'1px solid var(--border)',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:18,letterSpacing:3,color:'var(--muted2)',cursor:'pointer'}}>Back to Modes</button>
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* Options */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {q?.options.map((opt, i) => {
-          const isSelected = selected === opt
-          const isCorrect = correctAnswer && opt === correctAnswer
-          const isWrong = correctAnswer && isSelected && opt !== correctAnswer
-          return (
-            <button key={i} onClick={() => handleAnswer(opt)} disabled={!!selected || !!correctAnswer} style={{ padding: '20px 16px', background: isCorrect ? 'rgba(34,197,94,0.15)' : isWrong ? 'rgba(230,57,70,0.15)' : isSelected ? 'rgba(230,57,70,0.08)' : 'rgba(255,255,255,0.03)', border: `2px solid ${isCorrect ? '#22c55e' : isWrong ? 'var(--red)' : isSelected ? 'rgba(230,57,70,0.5)' : 'var(--border)'}`, borderRadius: 12, color: 'var(--text)', fontSize: 16, fontWeight: 500, cursor: selected || correctAnswer ? 'default' : 'pointer', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', fontFamily: "'Barlow Condensed'", fontSize: 13, letterSpacing: 1, flexShrink: 0 }}>
-                {['A', 'B', 'C', 'D'][i]}
-              </span>
-              {opt}
-            </button>
-          )
-        })}
-      </div>
     </div>
   )
 }

@@ -1,10 +1,10 @@
-// src/pages/Login.tsx
 import { useState } from 'react'
-import { auth, googleProvider, signInWithPopup, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '../services/firebase'
 import { useNavigate } from 'react-router-dom'
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { auth } from '../services/firebase'
 
 export default function Login() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [tab, setTab] = useState<'login'|'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -12,113 +12,121 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  async function handleGoogle() {
-    setLoading(true)
-    setError('')
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setError('')
     try {
-      await signInWithPopup(auth, googleProvider)
+      await signInWithEmailAndPassword(auth, email, password)
       navigate('/dashboard')
-    } catch (e: any) {
-      setError(e.message)
-    }
+    } catch(err: any) { setError(err.message) }
     setLoading(false)
   }
 
-  async function handleEmail(e: React.FormEvent) {
+  async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
-      if (mode === 'signup') {
-        await createUserWithEmailAndPassword(auth, email, password)
-      } else {
-        await signInWithEmailAndPassword(auth, email, password)
-      }
+      await createUserWithEmailAndPassword(auth, email, password)
+      navigate('/assessment')
+    } catch(err: any) { setError(err.message) }
+    setLoading(false)
+  }
+
+  async function handleGoogle() {
+    setLoading(true); setError('')
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider())
       navigate('/dashboard')
-    } catch (e: any) {
-      setError(e.message?.replace('Firebase: ', '').replace(/\(.*\)/, '').trim())
-    }
+    } catch(err: any) { setError(err.message) }
     setLoading(false)
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', overflow: 'hidden', position: 'relative', background: 'var(--bg)' }}>
-      {/* Background */}
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(230,57,70,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(230,57,70,0.03) 1px, transparent 1px)', backgroundSize: '60px 60px', animation: 'gridMove 20s linear infinite' }} />
-      <div style={{ position: 'absolute', width: 500, height: 500, background: 'rgba(230,57,70,0.12)', borderRadius: '50%', filter: 'blur(100px)', top: -150, right: -100, animation: 'pulse 6s ease-in-out infinite' }} />
-      <div style={{ position: 'absolute', width: 300, height: 300, background: 'rgba(230,57,70,0.06)', borderRadius: '50%', filter: 'blur(100px)', bottom: -100, left: '30%', animation: 'pulse 8s ease-in-out infinite reverse' }} />
+    <div style={{minHeight:'100vh',display:'flex',overflow:'hidden',position:'relative',background:'var(--bg)'}}>
+      <div className="bg-grid"/>
+      <div className="orb" style={{width:500,height:500,background:'rgba(230,57,70,0.12)',top:-150,right:-100,animation:'pulse 6s ease-in-out infinite'}}/>
+      <div className="orb" style={{width:300,height:300,background:'rgba(230,57,70,0.06)',bottom:-100,left:'30%',animation:'pulse 8s ease-in-out infinite reverse'}}/>
 
-      {/* Left Panel */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px 80px', position: 'relative', zIndex: 1, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both' }}>
-        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 52, letterSpacing: 3, lineHeight: 1, marginBottom: 6 }}>
-          DUEL<span style={{ color: 'var(--red)' }}>ITY</span>
+      {/* LEFT PANEL */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',padding:'60px 80px',position:'relative',zIndex:1,animation:'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) both'}}>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:52,letterSpacing:3,lineHeight:1,marginBottom:6}}>duelity<span style={{color:'var(--red)'}}>.</span>in</div>
+        <div style={{fontFamily:"'Barlow Condensed'",fontSize:13,letterSpacing:6,color:'var(--muted)',textTransform:'uppercase',marginBottom:80}}>Math. Speed. Domination.</div>
+        <div style={{fontFamily:"'Bebas Neue'",fontSize:'clamp(72px,8vw,120px)',lineHeight:0.9,letterSpacing:2,marginBottom:32}}>
+          <div style={{color:'var(--text)'}}>PROVE</div>
+          <div style={{color:'var(--red)',textShadow:'0 0 60px var(--red-glow)'}}>YOU'RE</div>
+          <div style={{color:'var(--muted2)',fontSize:'0.6em'}}>THE SMARTEST</div>
         </div>
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13, letterSpacing: 6, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 80 }}>
-          1V1 MATH BATTLES
-        </div>
-        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(72px, 8vw, 120px)', lineHeight: 0.9, letterSpacing: 2, marginBottom: 32 }}>
-          <div style={{ color: 'var(--text)' }}>PROVE</div>
-          <div style={{ color: 'var(--red)', textShadow: '0 0 60px var(--red-glow)' }}>YOUR</div>
-          <div style={{ color: 'var(--muted2)', fontSize: '0.6em' }}>INTELLECT</div>
-        </div>
-        <p style={{ fontSize: 16, color: 'var(--muted2)', lineHeight: 1.7, maxWidth: 420, marginBottom: 48 }}>
-          Battle students across India in real-time math duels. Climb the ranks, represent your college, dominate the leaderboard.
-        </p>
-        <div style={{ display: 'flex', gap: 40 }}>
-          {[['10K+', 'STUDENTS'], ['500+', 'COLLEGES'], ['1M+', 'BATTLES']].map(([num, label]) => (
-            <div key={label} style={{ borderLeft: '2px solid var(--red)', paddingLeft: 16 }}>
-              <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 36, letterSpacing: 2, lineHeight: 1 }}>{num}</div>
-              <div style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'var(--muted)', marginTop: 4 }}>{label}</div>
+        <p style={{fontSize:16,color:'var(--muted2)',lineHeight:1.7,maxWidth:420,marginBottom:48}}>Real-time 1v1 math battles. Ranked leaderboards. College rivalries. 10 seconds per question. No mercy.</p>
+        <div style={{display:'flex',gap:40}}>
+          {[['4','Game Modes'],['10s','Per Question'],['∞','AI Questions']].map(([n,l])=>(
+            <div key={l} style={{borderLeft:'2px solid var(--red)',paddingLeft:16}}>
+              <div style={{fontFamily:"'Bebas Neue'",fontSize:36,letterSpacing:2,lineHeight:1}}>{n}</div>
+              <div style={{fontSize:11,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginTop:4}}>{l}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div style={{ width: 480, background: 'var(--panel)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '60px 48px', position: 'relative', zIndex: 1, animation: 'slideIn 0.5s cubic-bezier(0.16,1,0.3,1) both', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, transparent, var(--red), transparent)', animation: 'scanline 3s ease-in-out infinite' }} />
+      {/* RIGHT PANEL */}
+      <div style={{width:480,background:'var(--panel)',borderLeft:'1px solid var(--border)',display:'flex',flexDirection:'column',justifyContent:'center',padding:'60px 48px',position:'relative',zIndex:1,overflow:'hidden',animation:'slideIn 0.5s cubic-bezier(0.16,1,0.3,1) both'}}>
+        <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,transparent,var(--red),transparent)',animation:'scanline 3s ease-in-out infinite'}}/>
+        <div style={{position:'absolute',bottom:-20,right:-20,fontFamily:"'Bebas Neue'",fontSize:260,color:'rgba(230,57,70,0.04)',lineHeight:1,pointerEvents:'none',userSelect:'none'}}>D</div>
 
-        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 32, letterSpacing: 2, marginBottom: 8 }}>
-          {mode === 'login' ? 'WELCOME BACK' : 'JOIN THE ARENA'}
-        </div>
-        <p style={{ fontSize: 14, color: 'var(--muted2)', marginBottom: 36 }}>
-          {mode === 'login' ? 'Sign in to continue your battle streak' : 'Create your account and start competing'}
-        </p>
-
-        {/* Google Button */}
-        <button onClick={handleGoogle} disabled={loading} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 15, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 24, transition: 'all 0.2s' }}
-          onMouseOver={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)')}
-          onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
-          Continue with Google
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          <span style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: 2 }}>OR</span>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginBottom:32}}>
+          {(['login','signup'] as const).map((t,i)=>(
+            <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'14px 0',textAlign:'center',fontFamily:"'Barlow Condensed'",fontSize:15,letterSpacing:3,textTransform:'uppercase',color:tab===t?'var(--red)':'var(--muted)',background:'none',border:'none',borderBottom:`2px solid ${tab===t?'var(--red)':'transparent'}`,marginBottom:-1,cursor:'pointer',transition:'all 0.2s'}}>
+              {i===0?'Login':'Sign Up'}
+            </button>
+          ))}
         </div>
 
-        <form onSubmit={handleEmail} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {mode === 'signup' && (
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 15, outline: 'none' }} />
-          )}
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email Address" required style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 15, outline: 'none' }} />
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required style={{ width: '100%', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontSize: 15, outline: 'none' }} />
+        {error && <div style={{padding:'10px 14px',background:'rgba(230,57,70,0.1)',border:'1px solid var(--border-red)',borderRadius:4,color:'var(--red)',fontSize:13,marginBottom:16}}>{error}</div>}
 
-          {error && <div style={{ fontSize: 13, color: 'var(--red)', padding: '10px 14px', background: 'rgba(230,57,70,0.1)', borderRadius: 6, border: '1px solid var(--border-red)' }}>{error}</div>}
-
-          <button type="submit" disabled={loading} style={{ width: '100%', padding: '14px 20px', background: 'var(--red)', border: 'none', borderRadius: 8, color: 'white', fontSize: 15, fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>
-            {loading ? 'LOADING...' : mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT'}
-          </button>
-        </form>
-
-        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 14, color: 'var(--muted)' }}>
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <button onClick={() => setMode(mode === 'login' ? 'signup' : 'login')} style={{ background: 'none', border: 'none', color: 'var(--red)', fontWeight: 600, fontSize: 14, padding: 0 }}>
-            {mode === 'login' ? 'Sign Up' : 'Sign In'}
-          </button>
-        </p>
+        {tab==='login' ? (
+          <form onSubmit={handleLogin}>
+            {[['Email Address','email',email,setEmail],['Password','password',password,setPassword]].map(([label,type,val,setter]: any)=>(
+              <div key={label} style={{marginBottom:20}}>
+                <label style={{display:'block',fontSize:11,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginBottom:8}}>{label}</label>
+                <input type={type} value={val} onChange={e=>setter(e.target.value)} placeholder={type==='email'?'you@college.edu':'••••••••'} style={{width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid var(--border)',borderRadius:4,padding:'14px 16px',fontFamily:'Barlow,sans-serif',fontSize:15,color:'var(--text)',outline:'none'}} required/>
+              </div>
+            ))}
+            <button type="submit" disabled={loading} style={{width:'100%',padding:16,background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:4,color:'white',cursor:'pointer',marginTop:8,opacity:loading?0.7:1}}>
+              {loading?'ENTERING...':'ENTER THE ARENA'}
+            </button>
+            <div style={{display:'flex',alignItems:'center',gap:12,margin:'24px 0'}}>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+              <span style={{fontSize:11,letterSpacing:2,color:'var(--muted)',textTransform:'uppercase'}}>or</span>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+            </div>
+            <button type="button" onClick={handleGoogle} style={{width:'100%',padding:14,background:'transparent',border:'1px solid var(--border)',borderRadius:4,fontSize:14,fontWeight:500,color:'var(--muted2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+              <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#EA4335" d="M5.27 9.76A7.08 7.08 0 0 1 12 4.9c1.76 0 3.35.63 4.6 1.67l3.43-3.43A11.94 11.94 0 0 0 12 .9C8.02.9 4.58 3.02 2.7 6.18l2.57 3.58z"/><path fill="#34A853" d="M16.04 18.01A7.06 7.06 0 0 1 12 19.1a7.08 7.08 0 0 1-6.72-4.82L2.7 17.82A11.94 11.94 0 0 0 12 23.1c3.24 0 6.18-1.22 8.38-3.21l-4.34-1.88z"/><path fill="#FBBC05" d="M19.1 12c0-.66-.06-1.3-.17-1.91H12v3.63h3.97a3.4 3.4 0 0 1-1.47 2.22l4.34 1.88A11.93 11.93 0 0 0 19.1 12z"/><path fill="#4285F4" d="M5.28 14.28A7.12 7.12 0 0 1 4.9 12c0-.8.14-1.57.38-2.29L2.71 6.13A11.94 11.94 0 0 0 .1 12c0 1.96.47 3.8 1.3 5.43l3.88-3.15z"/></svg>
+              Continue with Google
+            </button>
+            <p style={{marginTop:28,fontSize:12,color:'var(--muted)',textAlign:'center'}}>No account? <a onClick={()=>setTab('signup')} style={{color:'var(--red)',cursor:'pointer'}}>Create one — it's free</a></p>
+          </form>
+        ) : (
+          <form onSubmit={handleSignup}>
+            {[['Full Name','text',name,setName],['Email Address','email',email,setEmail],['Password','password',password,setPassword]].map(([label,type,val,setter]: any)=>(
+              <div key={label} style={{marginBottom:20}}>
+                <label style={{display:'block',fontSize:11,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginBottom:8}}>{label}</label>
+                <input type={type} value={val} onChange={e=>setter(e.target.value)} placeholder={type==='email'?'you@college.edu':type==='password'?'Min 8 characters':'Your name'} style={{width:'100%',background:'rgba(255,255,255,0.03)',border:'1px solid var(--border)',borderRadius:4,padding:'14px 16px',fontFamily:'Barlow,sans-serif',fontSize:15,color:'var(--text)',outline:'none'}} required/>
+              </div>
+            ))}
+            <button type="submit" disabled={loading} style={{width:'100%',padding:16,background:'var(--red)',border:'none',borderRadius:4,fontFamily:"'Bebas Neue'",fontSize:20,letterSpacing:4,color:'white',cursor:'pointer',marginTop:8,opacity:loading?0.7:1}}>
+              {loading?'CREATING...':'CREATE ACCOUNT & ENTER'}
+            </button>
+            <div style={{display:'flex',alignItems:'center',gap:12,margin:'24px 0'}}>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+              <span style={{fontSize:11,letterSpacing:2,color:'var(--muted)',textTransform:'uppercase'}}>or</span>
+              <div style={{flex:1,height:1,background:'var(--border)'}}/>
+            </div>
+            <button type="button" onClick={handleGoogle} style={{width:'100%',padding:14,background:'transparent',border:'1px solid var(--border)',borderRadius:4,fontSize:14,fontWeight:500,color:'var(--muted2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+              <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#EA4335" d="M5.27 9.76A7.08 7.08 0 0 1 12 4.9c1.76 0 3.35.63 4.6 1.67l3.43-3.43A11.94 11.94 0 0 0 12 .9C8.02.9 4.58 3.02 2.7 6.18l2.57 3.58z"/><path fill="#34A853" d="M16.04 18.01A7.06 7.06 0 0 1 12 19.1a7.08 7.08 0 0 1-6.72-4.82L2.7 17.82A11.94 11.94 0 0 0 12 23.1c3.24 0 6.18-1.22 8.38-3.21l-4.34-1.88z"/><path fill="#FBBC05" d="M19.1 12c0-.66-.06-1.3-.17-1.91H12v3.63h3.97a3.4 3.4 0 0 1-1.47 2.22l4.34 1.88A11.93 11.93 0 0 0 19.1 12z"/><path fill="#4285F4" d="M5.28 14.28A7.12 7.12 0 0 1 4.9 12c0-.8.14-1.57.38-2.29L2.71 6.13A11.94 11.94 0 0 0 .1 12c0 1.96.47 3.8 1.3 5.43l3.88-3.15z"/></svg>
+              Sign up with Google
+            </button>
+            <p style={{marginTop:28,fontSize:12,color:'var(--muted)',textAlign:'center'}}>Already have an account? <a onClick={()=>setTab('login')} style={{color:'var(--red)',cursor:'pointer'}}>Login here</a></p>
+          </form>
+        )}
       </div>
     </div>
   )
