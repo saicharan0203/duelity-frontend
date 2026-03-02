@@ -25,7 +25,7 @@ export default function Assessment() {
   const [qStart, setQStart] = useState(Date.now())
   const [tier, setTier] = useState<any>(null)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { firebaseUser: user } = useAuth()
 
   function startQuiz() { setPhase('quiz'); setQStart(Date.now()) }
 

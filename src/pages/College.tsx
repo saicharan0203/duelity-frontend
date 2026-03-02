@@ -36,7 +36,7 @@ export default function College() {
   const [selected, setSelected] = useState<typeof COLLEGES[0]|null>(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { firebaseUser: user } = useAuth()
 
   const filtered = search ? COLLEGES.filter(c => c.name.toLowerCase().includes(search.toLowerCase()) || c.loc.toLowerCase().includes(search.toLowerCase())) : []
   const popular = COLLEGES.slice(0, 6)

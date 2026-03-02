@@ -1,10 +1,9 @@
-// src/contexts/AuthContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { onAuthStateChanged, User } from 'firebase/auth'
 import { auth } from '../services/firebase'
 import api from '../services/api'
 
-interface UserProfile {
+export interface UserProfile {
   id: string
   name: string
   email: string
@@ -22,6 +21,7 @@ interface UserProfile {
 
 interface AuthContextType {
   firebaseUser: User | null
+  user: User | null  // alias for firebaseUser
   profile: UserProfile | null
   loading: boolean
   refreshProfile: () => Promise<void>
@@ -35,8 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   async function refreshProfile() {
+    if (!firebaseUser) return
     try {
-      const res = await api.get('/api/users/me')
+      const token = await firebaseUser.getIdToken()
+      const res = await api.post('/api/auth/verify-token', {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
       setProfile(res.data)
     } catch {}
   }
@@ -51,7 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             headers: { Authorization: `Bearer ${token}` }
           })
           setProfile(res.data)
-        } catch {}
+        } catch {
+          // If backend fails, still allow access - don't block the user
+          setProfile(null)
+        }
       } else {
         setProfile(null)
       }
@@ -60,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ firebaseUser, profile, loading, refreshProfile }}>
+    <AuthContext.Provider value={{ firebaseUser, user: firebaseUser, profile, loading, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

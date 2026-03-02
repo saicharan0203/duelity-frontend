@@ -1,4 +1,3 @@
-// src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
@@ -19,33 +18,19 @@ function Spinner() {
   )
 }
 
-// For logged-in users — redirects new users through onboarding
+// Only requires login — no onboarding checks
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { firebaseUser, profile, loading } = useAuth()
+  const { firebaseUser, loading } = useAuth()
   if (loading) return <Spinner />
   if (!firebaseUser) return <Navigate to="/login" replace />
-  // Must complete assessment first
-  if (profile?.isNewUser) return <Navigate to="/assessment" replace />
-  // Must complete college selection
-  if (profile && !profile.collegeSelected) return <Navigate to="/college" replace />
   return <>{children}</>
 }
 
 // Only for logged-out users
 function AuthRoute({ children }: { children: React.ReactNode }) {
-  const { firebaseUser, profile, loading } = useAuth()
-  if (loading) return <Spinner />
-  if (firebaseUser && profile && !profile.isNewUser && profile.collegeSelected) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <>{children}</>
-}
-
-// Assessment and College pages — accessible during onboarding only
-function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { firebaseUser, loading } = useAuth()
   if (loading) return <Spinner />
-  if (!firebaseUser) return <Navigate to="/login" replace />
+  if (firebaseUser) return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 
@@ -55,12 +40,12 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
-          <Route path="/assessment" element={<OnboardingRoute><Assessment /></OnboardingRoute>} />
-          <Route path="/college" element={<OnboardingRoute><College /></OnboardingRoute>} />
+          <Route path="/assessment" element={<ProtectedRoute><Assessment /></ProtectedRoute>} />
+          <Route path="/college" element={<ProtectedRoute><College /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/play" element={<ProtectedRoute><GameModes /></ProtectedRoute>} />
-          <Route path="/battle/:matchId" element={<ProtectedRoute><Battle /></ProtectedRoute>} />
-          <Route path="/room/:code?" element={<ProtectedRoute><FriendRoom /></ProtectedRoute>} />
+          <Route path="/battle" element={<ProtectedRoute><Battle /></ProtectedRoute>} />
+          <Route path="/friend" element={<ProtectedRoute><FriendRoom /></ProtectedRoute>} />
           <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
