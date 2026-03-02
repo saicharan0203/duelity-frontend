@@ -10,8 +10,12 @@ export async function connectSocket(): Promise<Socket> {
   const token = await getIdToken()
   socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001', {
     auth: { token },
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
+    upgrade: true,
   })
+
+  socket.on('connect', () => console.log('Socket connected'))
+  socket.on('connect_error', (err) => console.error('Socket error:', err.message))
 
   return socket
 }
