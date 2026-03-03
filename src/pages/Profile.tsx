@@ -86,7 +86,14 @@ export default function Profile() {
 
             {/* Stats grid */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:12,marginBottom:28}}>
-              {[['🎮','var(--text)',total,'Matches Played'],['🏆','#22c55e',wins,'Wins'],['💀','var(--red)',losses,'Losses'],['🎯','#f59e0b',winRate+'%','Win Rate'],['📐','#60a5fa',accuracy+'%','Accuracy'],['🔥','var(--red)',7,'Best Streak']].map(([icon,color,val,lbl])=>(
+              {([
+                ['🎮','var(--text)',String(total),'Matches Played'],
+                ['🏆','#22c55e',String(wins),'Wins'],
+                ['💀','var(--red)',String(losses),'Losses'],
+                ['🎯','#f59e0b',winRate+'%','Win Rate'],
+                ['📐','#60a5fa',accuracy+'%','Accuracy'],
+                ['🔥','var(--red)','7','Best Streak']
+              ] as [string,string,string,string][]).map(([icon,color,val,lbl])=>(
                 <div key={lbl} style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:10,padding:'20px 16px',textAlign:'center'}}>
                   <div style={{fontSize:22,marginBottom:8,color}}>{icon}</div>
                   <div style={{fontFamily:"'Bebas Neue'",fontSize:32,letterSpacing:2,lineHeight:1,marginBottom:4,color}}>{val}</div>

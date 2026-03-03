@@ -42,19 +42,19 @@ export default function GameModes() {
     }
   }, [orbitAngle])
 
-  function enterMode() {
+  async function enterMode() {
     const m = MODES[active]
     if (m.name === 'Friends') { navigate('/friend'); return }
     if (m.name === 'Practice') { navigate('/battle?mode=practice'); return }
     if (!user) return
     setSearching(true)
-    const socket = connectSocket()
+    const socket = await connectSocket()
     socket.emit('joinMatchmaking', { userId: user.uid, mode: m.name.toLowerCase(), tier: profile?.tier || 'bronze' })
     socket.on('matchFound', (data: any) => {
       setSearching(false)
       navigate(`/battle?matchId=${data.matchId}&mode=${m.name.toLowerCase()}`)
     })
-    setTimeout(() => { if (searching) { setSearching(false); navigate('/battle?mode='+m.name.toLowerCase()) } }, 30000)
+    setTimeout(() => { setSearching(false); navigate('/battle?mode='+m.name.toLowerCase()) }, 30000)
   }
 
   const m = MODES[active]
