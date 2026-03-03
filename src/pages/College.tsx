@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
+import api from '../services/api'
 
 const COLLEGES = [
   {icon:'🏛️', name:'IIT Bombay', loc:'Mumbai, Maharashtra'},
@@ -46,7 +46,7 @@ export default function College() {
     setLoading(true)
     try {
       if (user && selected) {
-        await axios.post(`${import.meta.env.VITE_API_URL}/api/users/set-college`, { uid: user.uid, collegeName: selected.name })
+        await api.post('/api/auth/set-college', { collegeName: selected.name })
       }
       navigate('/dashboard')
     } catch(e) { navigate('/dashboard') }

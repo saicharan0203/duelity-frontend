@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
+import api from '../services/api'
 
 const QUESTIONS = [
   {q:"What is 15 × 8?", opts:["100","120","110","130"], ans:"120", d:1},
@@ -50,12 +50,14 @@ export default function Assessment() {
     else if (accuracy >= 0.7) t = {label:'🥇 Gold', pts:600, color:'#e63946', desc:"Strong skills. You're ready to climb."}
     else if (accuracy >= 0.5) t = {label:'🥈 Silver', pts:400, color:'#9ca3af', desc:"Solid foundation. Keep grinding."}
     else t = {label:'🥉 Bronze', pts:200, color:'#cd7f32', desc:"Everyone starts somewhere. Let's go."}
-    setTier({...t, correct, accuracy: Math.round(accuracy*100), totalTime: Math.round(timings.reduce((a,b)=>a+b,0))})
+    const totalTime = timings.reduce((a,b)=>a+b,0)
+    setTier({...t, correct, accuracy: Math.round(accuracy*100), totalTime: Math.round(totalTime)})
     setPhase('result')
     // Save to backend
     if (user) {
-      axios.post(`${import.meta.env.VITE_API_URL}/api/users/complete-assessment`, {
-        uid: user.uid, tier: t.label.split(' ')[1].toLowerCase(), points: t.pts
+      api.post('/api/auth/complete-assessment', {
+        correct,
+        timeSecs: Math.max(1, Math.round(totalTime)),
       }).catch(console.error)
     }
   }
