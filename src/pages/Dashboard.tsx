@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { signOut } from 'firebase/auth'
 import { auth } from '../services/firebase'
+import api from '../services/api'
 
 const TIER_COLORS: Record<string,string> = {diamond:'#f59e0b',platinum:'#60a5fa',gold:'#e63946',silver:'#9ca3af',bronze:'#cd7f32'}
 const TIER_ICONS: Record<string,string> = {diamond:'👑',platinum:'💎',gold:'🥇',silver:'🥈',bronze:'🥉'}
 
 export default function Dashboard() {
   const { profile } = useAuth()
+  const [indiaRank, setIndiaRank] = useState<number | null>(null)
+  const [collegeRank, setCollegeRank] = useState<number | null>(null)
   const navigate = useNavigate()
   const tier = (profile?.tier || 'bronze').toLowerCase()
   const tierColor = TIER_COLORS[tier] || '#cd7f32'
@@ -21,6 +25,22 @@ export default function Dashboard() {
   const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening'
   const circumference = 2 * Math.PI * 50
   const dashArr = (winRate / 100) * circumference
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadRanks() {
+      try {
+        const res = await api.get('/api/users/me')
+        if (cancelled) return
+        setIndiaRank(res.data.indiaRank ?? null)
+        setCollegeRank(res.data.collegeRank ?? null)
+      } catch {
+        // ignore rank errors; keep placeholders
+      }
+    }
+    loadRanks()
+    return () => { cancelled = true }
+  }, [])
 
   const Sidebar = () => (
     <aside style={{width:240,background:'var(--panel)',borderRight:'1px solid var(--border)',display:'flex',flexDirection:'column',padding:'32px 20px',position:'sticky',top:0,height:'100vh',flexShrink:0}}>
@@ -78,16 +98,24 @@ export default function Dashboard() {
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 200px',gap:16,marginBottom:24,position:'relative',zIndex:1}}>
           <div style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:8,padding:24}}>
             <div style={{fontSize:12,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>🇮🇳 India Rank</div>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:56,letterSpacing:2,lineHeight:1,color:'var(--red)',textShadow:'0 0 30px var(--red-glow)',marginBottom:4}}>#—</div>
-            <div style={{fontSize:12,color:'var(--muted)',marginBottom:16}}>Play ranked to get your rank</div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:56,letterSpacing:2,lineHeight:1,color:'var(--red)',textShadow:'0 0 30px var(--red-glow)',marginBottom:4}}>
+              {indiaRank ? `#${indiaRank}` : '#—'}
+            </div>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:16}}>
+              {indiaRank ? 'Your current position in India' : 'Play ranked to get your rank'}
+            </div>
             <div style={{width:'100%',height:4,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden'}}>
               <div style={{height:'100%',width:'0%',background:'var(--red)',borderRadius:2}}/>
             </div>
           </div>
           <div style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:8,padding:24}}>
             <div style={{fontSize:12,letterSpacing:3,textTransform:'uppercase',color:'var(--muted)',marginBottom:12}}>🏫 College Rank</div>
-            <div style={{fontFamily:"'Bebas Neue'",fontSize:56,letterSpacing:2,lineHeight:1,color:'#f59e0b',textShadow:'0 0 30px rgba(245,158,11,0.3)',marginBottom:4}}>#—</div>
-            <div style={{fontSize:12,color:'var(--muted)',marginBottom:16}}>{profile?.college?.name||'No college selected'}</div>
+            <div style={{fontFamily:"'Bebas Neue'",fontSize:56,letterSpacing:2,lineHeight:1,color:'#f59e0b',textShadow:'0 0 30px rgba(245,158,11,0.3)',marginBottom:4}}>
+              {collegeRank ? `#${collegeRank}` : '#—'}
+            </div>
+            <div style={{fontSize:12,color:'var(--muted)',marginBottom:16}}>
+              {profile?.college?.name || 'No college selected'}
+            </div>
             <div style={{width:'100%',height:4,background:'rgba(255,255,255,0.06)',borderRadius:2,overflow:'hidden'}}>
               <div style={{height:'100%',width:'0%',background:'#f59e0b',borderRadius:2}}/>
             </div>

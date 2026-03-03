@@ -1,16 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { signOut } from 'firebase/auth'
 import { auth } from '../services/firebase'
-
-const RECENT = [
-  {opp:'RajKumar99',oppTier:'🥇',result:'win',myScore:90,oppScore:60,rating:'+18',mode:'Ranked',time:'2 hrs ago'},
-  {opp:'MathStar23',oppTier:'🥇',result:'loss',myScore:50,oppScore:80,rating:'-10',mode:'Ranked',time:'5 hrs ago'},
-  {opp:'QuizMaster',oppTier:'💎',result:'win',myScore:100,oppScore:70,rating:'+22',mode:'Ranked',time:'Yesterday'},
-  {opp:'ZeroSec',oppTier:'👑',result:'loss',myScore:60,oppScore:90,rating:'-14',mode:'Ranked',time:'Yesterday'},
-  {opp:'BrainGod',oppTier:'🥇',result:'win',myScore:80,oppScore:50,rating:'+16',mode:'Casual',time:'2 days ago'},
-]
+import api from '../services/api'
 
 const TIER_COLORS: Record<string,string> = {diamond:'#f59e0b',platinum:'#60a5fa',gold:'#e63946',silver:'#9ca3af',bronze:'#cd7f32'}
 const TIER_ICONS: Record<string,string> = {diamond:'👑',platinum:'💎',gold:'🥇',silver:'🥈',bronze:'🥉'}
@@ -19,6 +12,7 @@ export default function Profile() {
   const { profile } = useAuth()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
+  const [recent, setRecent] = useState<any[]>([])
   const tier = (profile?.tier||'bronze').toLowerCase()
   const tierColor = TIER_COLORS[tier]||'#cd7f32'
   const tierIcon = TIER_ICONS[tier]||'🥉'
@@ -29,6 +23,21 @@ export default function Profile() {
   const winRate = total>0?Math.round((wins/total)*100):73
   const accuracy = profile?.accuracy||78
   const rating = profile?.rating||1240
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadMatches() {
+      try {
+        const res = await api.get('/api/users/me/matches')
+        if (cancelled) return
+        setRecent(res.data || [])
+      } catch {
+        // ignore
+      }
+    }
+    loadMatches()
+    return () => { cancelled = true }
+  }, [])
 
   return (
     <div style={{display:'flex',minHeight:'100vh',background:'var(--bg)',position:'relative'}}>
@@ -106,23 +115,49 @@ export default function Profile() {
             <div style={{marginBottom:28}}>
               <div style={{fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:3,marginBottom:14}}>Recent Matches</div>
               <div style={{background:'var(--panel)',border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
-                {RECENT.map((m,i)=>(
-                  <div key={i} style={{display:'grid',gridTemplateColumns:'90px 1fr 140px 90px 100px',alignItems:'center',padding:'14px 20px',borderBottom:i<RECENT.length-1?'1px solid rgba(255,255,255,0.03)':'none'}}>
-                    <div style={{fontFamily:"'Bebas Neue'",fontSize:15,letterSpacing:2,padding:'4px 10px',borderRadius:3,textAlign:'center',color:m.result==='win'?'#22c55e':'var(--red)',background:m.result==='win'?'rgba(34,197,94,0.1)':'rgba(230,57,70,0.1)'}}>{m.result==='win'?'✓ WIN':'✗ LOSS'}</div>
+                {recent.length === 0 && (
+                  <div style={{padding:'16px 20px',fontSize:13,color:'var(--muted)'}}>
+                    Play some matches to see your recent history.
+                  </div>
+                )}
+                {recent.map((m, i)=> {
+                  const isP1 = m.player1Id === profile?.id
+                  const myScore = isP1 ? m.p1Score : m.p2Score
+                  const oppScore = isP1 ? m.p2Score : m.p1Score
+                  const opponent = isP1 ? m.player2 : m.player1
+                  const iWon = m.winnerId && m.winnerId === profile?.id
+                  const isDraw = m.winnerId === null
+                  const result = isDraw ? 'draw' : iWon ? 'win' : 'loss'
+                  const ratingChange = isP1 ? m.p1RatingChange : m.p2RatingChange
+                  const ratingLabel = ratingChange === 0 ? '±0' : `${ratingChange > 0 ? '+' : ''}${ratingChange}`
+                  const modeLabel = m.mode.charAt(0).toUpperCase() + m.mode.slice(1)
+                  const createdAt = new Date(m.createdAt)
+                  const timeLabel = createdAt.toLocaleString()
+                  return (
+                  <div key={m.id || i} style={{display:'grid',gridTemplateColumns:'90px 1fr 140px 90px 160px',alignItems:'center',padding:'14px 20px',borderBottom:i<recent.length-1?'1px solid rgba(255,255,255,0.03)':'none'}}>
+                    <div style={{fontFamily:"'Bebas Neue'",fontSize:15,letterSpacing:2,padding:'4px 10px',borderRadius:3,textAlign:'center',color:result==='win'?'#22c55e':result==='loss'?'var(--red)':'var(--muted2)',background:result==='win'?'rgba(34,197,94,0.1)':result==='loss'?'rgba(230,57,70,0.1)':'rgba(148,163,184,0.15)'}}>
+                      {result==='win'?'✓ WIN':result==='loss'?'✗ LOSS':'DRAW'}
+                    </div>
                     <div style={{display:'flex',alignItems:'center',gap:12}}>
-                      <div style={{width:34,height:34,borderRadius:'50%',background:'linear-gradient(135deg,#1a2a3a,#0d1520)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Bebas Neue'",fontSize:13,flexShrink:0}}>{m.opp.slice(0,2).toUpperCase()}</div>
+                      <div style={{width:34,height:34,borderRadius:'50%',background:'linear-gradient(135deg,#1a2a3a,#0d1520)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Bebas Neue'",fontSize:13,flexShrink:0}}>
+                        {(opponent?.name || 'OP').slice(0,2).toUpperCase()}
+                      </div>
                       <div>
-                        <div style={{fontSize:14,fontWeight:600}}>{m.opp} {m.oppTier}</div>
-                        <div style={{fontSize:11,color:'var(--muted)'}}>{m.mode}</div>
+                        <div style={{fontSize:14,fontWeight:600}}>
+                          {opponent?.name || 'Opponent'}
+                        </div>
+                        <div style={{fontSize:11,color:'var(--muted)'}}>{modeLabel}</div>
                       </div>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:8,fontFamily:"'Bebas Neue'",fontSize:22,letterSpacing:2}}>
-                      <span>{m.myScore}</span><span style={{color:'var(--muted)',fontSize:16}}>—</span><span style={{color:'var(--muted2)'}}>{m.oppScore}</span>
+                      <span>{myScore}</span><span style={{color:'var(--muted)',fontSize:16}}>—</span><span style={{color:'var(--muted2)'}}>{oppScore}</span>
                     </div>
-                    <div style={{fontFamily:"'Barlow Condensed'",fontSize:15,letterSpacing:2,fontWeight:600,color:m.result==='win'?'#22c55e':'var(--red)'}}>{m.rating} pts</div>
-                    <div style={{fontSize:12,color:'var(--muted)'}}>{m.time}</div>
+                    <div style={{fontFamily:"'Barlow Condensed'",fontSize:15,letterSpacing:2,fontWeight:600,color:ratingChange>0?'#22c55e':ratingChange<0?'var(--red)':'var(--muted2)'}}>
+                      {ratingLabel} pts
+                    </div>
+                    <div style={{fontSize:12,color:'var(--muted)'}}>{timeLabel}</div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </>

@@ -1,32 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { signOut } from 'firebase/auth'
 import { auth } from '../services/firebase'
+import api from '../services/api'
 
 const TIERS = [{min:1400,label:'👑 Diamond',color:'#f59e0b'},{min:1000,label:'💎 Platinum',color:'#60a5fa'},{min:700,label:'🥇 Gold',color:'#e63946'},{min:400,label:'🥈 Silver',color:'#9ca3af'},{min:0,label:'🥉 Bronze',color:'#cd7f32'}]
 function getTier(r:number){return TIERS.find(t=>r>=t.min)||TIERS[4]}
 
-const INDIA = [
-  {init:'PK',name:'ProKiller007',college:'IIT Madras',rating:2140,wins:187,me:false},
-  {init:'RK',name:'RajKumar99',college:'IIT Delhi',rating:1890,wins:162,me:false},
-  {init:'MS',name:'MathStar23',college:'BITS Pilani',rating:1754,wins:144,me:false},
-  {init:'NK',name:'NitroKing',college:'IIT Bombay',rating:1680,wins:138,me:false},
-  {init:'QM',name:'QuizMaster',college:'NIT Trichy',rating:1620,wins:129,me:false},
-  {init:'ZS',name:'ZeroSec',college:'VIT Vellore',rating:1540,wins:118,me:false},
-  {init:'BG',name:'BrainGod',college:'IIT Kanpur',rating:1490,wins:112,me:false},
-  {init:'CF',name:'CalcFire',college:'NIT Warangal',rating:1460,wins:107,me:false},
-  {init:'SS',name:'SpeedSolve',college:'IIT Kharagpur',rating:1380,wins:99,me:false},
-  {init:'AK',name:'Arjun Kumar',college:'IIT Bombay',rating:1240,wins:61,me:true},
-]
-const COLLEGE = [
-  {init:'SK',name:'SpeedKing',college:'ECE • 4th Year',rating:1680,wins:138,me:false},
-  {init:'VR',name:'VRocker',college:'CSE • 3rd Year',rating:1420,wins:112,me:false},
-  {init:'NP',name:'NerdPower',college:'MECH • 2nd Year',rating:1380,wins:99,me:false},
-  {init:'NK',name:'NitroKing',college:'CSE • 4th Year',rating:1340,wins:95,me:false},
-  {init:'RS',name:'RocketSci',college:'EE • 3rd Year',rating:1290,wins:88,me:false},
-  {init:'AK',name:'Arjun Kumar',college:'CSE • 2nd Year',rating:1240,wins:61,me:true},
-]
+type UiPlayer = {
+  id: string
+  init: string
+  name: string
+  college: string
+  rating: number
+  wins: number
+  me: boolean
+}
 
 function Podium({data,collegiate}:{data:typeof INDIA,collegiate?:boolean}) {
   const top3 = [data[1],data[0],data[2]]
@@ -57,6 +47,9 @@ function Podium({data,collegiate}:{data:typeof INDIA,collegiate?:boolean}) {
 
 export default function Leaderboard() {
   const [search, setSearch] = useState('')
+  const [india, setIndia] = useState<UiPlayer[]>([])
+  const [college, setCollege] = useState<UiPlayer[]>([])
+  const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const { profile } = useAuth()
   const initials = (profile?.name||'U').split(' ').map((w:string)=>w[0]).join('').toUpperCase().slice(0,2)
@@ -64,7 +57,39 @@ export default function Leaderboard() {
   const TIER_COLORS: Record<string,string> = {diamond:'#f59e0b',platinum:'#60a5fa',gold:'#e63946',silver:'#9ca3af',bronze:'#cd7f32'}
   const TIER_ICONS: Record<string,string> = {diamond:'👑',platinum:'💎',gold:'🥇',silver:'🥈',bronze:'🥉'}
 
-  const filter = (d: typeof INDIA) => search ? d.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())||p.college.toLowerCase().includes(search.toLowerCase())) : d
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const [indiaRes, collegeRes] = await Promise.all([
+          api.get('/api/leaderboard/india'),
+          profile?.college?.id ? api.get(`/api/leaderboard/college/${profile.college.id}`) : Promise.resolve({ data: [] }),
+        ])
+        if (cancelled) return
+        const mapUsers = (users: any[]): UiPlayer[] =>
+          users.map(u => ({
+            id: u.id,
+            init: (u.name || 'U').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0,2),
+            name: u.name,
+            college: u.college?.name || '—',
+            rating: u.rating,
+            wins: u.wins || 0,
+            me: u.id === profile?.id,
+          }))
+        setIndia(mapUsers(indiaRes.data || []))
+        setCollege(mapUsers(collegeRes.data || []))
+      } catch (e) {
+        // ignore for now, show empty
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [profile?.id, profile?.college?.id])
+
+  const filter = (d: UiPlayer[]) =>
+    search ? d.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())||p.college.toLowerCase().includes(search.toLowerCase())) : d
 
   const tableStyle = {background:'var(--panel)',border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}
   const headCols = '60px 1fr 1fr 100px 100px 80px'
@@ -107,8 +132,21 @@ export default function Leaderboard() {
           </div>
         </div>
 
-        {/* India Rankings */}
-        {[{title:'🇮🇳 India Rankings',count:'18,492 Players',data:filter(INDIA),cols:'College'},{title:'🏫 IIT Bombay Rankings',count:'312 Players',data:filter(COLLEGE),cols:'Branch'}].map(({title,count,data,cols})=>(
+        {/* India & College Rankings */}
+        {loading && (
+          <div style={{fontSize:13,color:'var(--muted)',marginBottom:16}}>Loading leaderboards...</div>
+        )}
+        {[{
+            title:'🇮🇳 India Rankings',
+            count: india.length ? `${india.length} Players` : 'No players yet',
+            data: filter(india),
+            cols:'College'
+          },{
+            title: profile?.college?.name ? `🏫 ${profile.college.name} Rankings` : '🏫 College Rankings',
+            count: college.length ? `${college.length} Players` : 'No players yet',
+            data: filter(college),
+            cols:'College'
+          }].map(({title,count,data,cols})=>(
           <div key={title} style={{marginBottom:32,animation:'fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <div style={{fontFamily:"'Bebas Neue'",fontSize:26,letterSpacing:3}}>{title}</div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { connectSocket, getSocket } from '../services/socket'
+import { connectSocket } from '../services/socket'
 import { useAuth } from '../contexts/AuthContext'
 
 const MODES = [
@@ -49,12 +49,15 @@ export default function GameModes() {
     if (!user) return
     setSearching(true)
     const socket = await connectSocket()
-    socket.emit('joinMatchmaking', { userId: user.uid, mode: m.name.toLowerCase(), tier: profile?.tier || 'bronze' })
-    socket.on('matchFound', (data: any) => {
+    const modeKey = m.name.toLowerCase() as 'ranked' | 'casual'
+
+    socket.emit('queue:join', { mode: modeKey })
+
+    socket.off('match:found')
+    socket.on('match:found', (data: any) => {
       setSearching(false)
-      navigate(`/battle?matchId=${data.matchId}&mode=${m.name.toLowerCase()}`)
+      navigate(`/battle?mode=${modeKey}`, { state: { match: data } })
     })
-    setTimeout(() => { setSearching(false); navigate('/battle?mode='+m.name.toLowerCase()) }, 30000)
   }
 
   const m = MODES[active]
